@@ -1,63 +1,101 @@
 package rest_errors
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 )
 
-type RestErr struct {
-	Message string        `json:"message"`
-	Status  int           `json:"status"`
-	Error   string        `json:"error"`
-	Causes  []interface{} `json:"causes"`
+type RestErr interface {
+	Message() string
+	Status() int
+	Error() string
+	Causes() []interface{}
 }
 
-func NewError(msg string) error {
-	return errors.New(msg)
+type restErr struct {
+	message string        `json:"message"`
+	status  int           `json:"status"`
+	error   string        `json:"error"`
+	causes  []interface{} `json:"causes"`
 }
 
-func NewBadRequestError(msg string) *RestErr {
-	return &RestErr{
-		Message: msg,
-		Status:  http.StatusBadRequest,
-		Error:   "bad_request",
+func (e restErr) Error() string {
+	return fmt.Sprintf(
+		"message: %s - status: %d - error: %s - causes: [ %v ]",
+		e.message, e.status, e.error, e.causes,
+	)
+}
+
+func (e restErr) Message() string {
+	return e.message
+}
+
+func (e restErr) Status() int {
+	return e.status
+}
+
+func (e restErr) Causes() []interface{} {
+	return e.causes
+}
+
+// func NewError(msg string) error {
+// 	return errors.New(msg)
+// }
+
+func NewRestError(
+	message string, status int, err string, causes []interface{},
+) RestErr {
+	return restErr{
+		message: message,
+		status:  status,
+		error:   err,
+		causes:  causes,
 	}
 }
 
-func NewNotFoundError(msg string) *RestErr {
-	return &RestErr{
-		Message: msg,
-		Status:  http.StatusNotFound,
-		Error:   "not_found",
+func NewRestErrorFromBytes(bytes []byte) (RestErr, error) {
+	var apiErr restErr
+	if err := json.Unmarshal(bytes, &apiErr); err != nil {
+		return nil, errors.New("invalid json")
+	}
+	return apiErr, nil
+}
+
+func NewBadRequestError(msg string) RestErr {
+	return restErr{
+		message: msg,
+		status:  http.StatusBadRequest,
+		error:   "bad_request",
 	}
 }
 
-func NewUnauthorizedError(message string) *RestErr {
-	return &RestErr{
-		Message: message,
-		Status:  http.StatusUnauthorized,
-		Error:   "unauthorized",
+func NewNotFoundError(msg string) RestErr {
+	return restErr{
+		message: msg,
+		status:  http.StatusNotFound,
+		error:   "not_found",
 	}
 }
 
-func NewInternalServerError(msg string, err error) *RestErr {
-	ret := &RestErr{
-		Message: msg,
-		Status:  http.StatusInternalServerError,
-		Error:   "internal_server_error",
+func NewUnauthorizedError(message string) RestErr {
+	return restErr{
+		message: message,
+		status:  http.StatusUnauthorized,
+		error:   "unauthorized",
+	}
+}
+
+func NewInternalServerError(msg string, err error) RestErr {
+	ret := restErr{
+		message: msg,
+		status:  http.StatusInternalServerError,
+		error:   "internal_server_error",
 	}
 	if err != nil {
-		ret.Causes = append(ret.Causes, err.Error())
+		ret.causes = append(ret.causes, err.Error())
 	}
 
 	return ret
-}
-
-func NewRestError(message string, status int, err string, causes []interface{}) *RestErr {
-	return &RestErr{
-		Message: message,
-		Status:  status,
-		Error:   err,
-		Causes:  causes,
-	}
 }
